@@ -1,0 +1,22 @@
+{
+  "name": "vidly-api",
+  "version": "1.0.0",
+  "description": "Minimal zero-dependency Node.js API that resolves Vidly.pro stream URLs for movies, TV and anime. Returns the fastest server by default, or a specific server via ?server=.",
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test_lib.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "vidly",
+    "streaming",
+    "hls",
+    "api",
+    "proxy"
+  ],
+  "license": "MIT"
+}
