@@ -8,10 +8,16 @@
 // server that yields >=1 stream. With ?server=, returns that specific server.
 //
 // Run: node server.js   (PORT env var, default 8787)
-// Zero dependencies — Node 18+ (global fetch).
+// Zero runtime dependencies — Node 18+.
+//
+//   ?worker=1            → plain proxy mode: every URL rewritten through the worker
+//   ?worker=<https://…>  → custom worker base per request
+//   ?data=en             → encrypted mode (AES-256-GCM tokens), wins over worker=1
 
 const http = require("http");
 const v = require("./lib/vidly");
+const fleet = require("./lib/fleet");
+const { hasProxy, PROXY_HOST, PROXY_PORT } = require("./lib/proxy");
 
 const PORT = process.env.PORT || 8787;
 
@@ -33,7 +39,10 @@ function findServer(servers, name) {
 }
 
 // Build the response envelope shared by all routes.
-async function handle(mediaPath, serverName) {
+// query carries the fleet params (worker/data) so the final envelope can be
+// URL-rewritten/encrypted before serialization. selfBase is this server's own
+// origin (used to leave app-owned links untouched).
+async function handle(mediaPath, serverName, query, selfBase) {
   const ctx = await v.loadMedia(mediaPath);
   let chosen, streams, ms, mode, errors, allRanked;
 
@@ -65,7 +74,7 @@ async function handle(mediaPath, serverName) {
     errors = fr.errors;
   }
 
-  return {
+  const body = {
     title: ctx.meta.title || null,
     year: ctx.meta.year || null,
     poster: ctx.meta.poster || null,
@@ -91,35 +100,37 @@ async function handle(mediaPath, serverName) {
     ranking: allRanked,
     errors: errors && errors.length ? errors : undefined,
   };
+
+  return fleet.applyFleet(body, query, selfBase);
 }
 
 // Route a parsed URL. Returns { status, body }.
-async function route(method, pathname, query) {
+async function route(method, pathname, query, selfBase) {
   if (method !== "GET") return { status: 405, body: { error: "GET only" } };
 
   // /api/movie/:tmdbId
   let m = pathname.match(/^\/api\/movie\/(\w+)$/);
-  if (m) return await run(() => handle(`/movie/${m[1]}`, query.server));
+  if (m) return await run(() => handle(`/movie/${m[1]}`, query.server, query, selfBase));
 
   // /api/tv/:tmdbId/:season/:episode
   m = pathname.match(/^\/api\/tv\/(\w+)\/(\d+)\/(\d+)$/);
   if (m)
     return await run(() =>
-      handle(`/tv/${m[1]}/${m[2]}/${m[3]}`, query.server)
+      handle(`/tv/${m[1]}/${m[2]}/${m[3]}`, query.server, query, selfBase)
     );
 
   // /api/anime/mal/:malId/:episode/:audio
   m = pathname.match(/^\/api\/anime\/mal\/(\w+)\/(\d+)\/(sub|dub)$/i);
   if (m)
     return await run(() =>
-      handle(`/anime/mal/${m[1]}/${m[2]}/${m[3].toLowerCase()}`, query.server)
+      handle(`/anime/mal/${m[1]}/${m[2]}/${m[3].toLowerCase()}`, query.server, query, selfBase)
     );
 
   // /api/anime/:anilistId/:episode/:audio
   m = pathname.match(/^\/api\/anime\/(\w+)\/(\d+)\/(sub|dub)$/i);
   if (m)
     return await run(() =>
-      handle(`/anime/${m[1]}/${m[2]}/${m[3].toLowerCase()}`, query.server)
+      handle(`/anime/${m[1]}/${m[2]}/${m[3].toLowerCase()}`, query.server, query, selfBase)
     );
 
   if (pathname === "/" || pathname === "/health")
@@ -164,7 +175,10 @@ function parseUrl(req) {
 
 const server = http.createServer(async (req, res) => {
   const { pathname, query } = parseUrl(req);
-  const { status, body } = await route(req.method, pathname, query);
+  // selfBase lets the fleet rewriter leave this app's own public links alone.
+  const host = req.headers.host;
+  const selfBase = host ? `http://${host}` : null;
+  const { status, body } = await route(req.method, pathname, query, selfBase);
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
     "Access-Control-Allow-Origin": "*",
@@ -180,4 +194,8 @@ server.listen(PORT, () => {
   console.log(`  GET /api/tv/:tmdbId/:season/:episode[?server=Edge]`);
   console.log(`  GET /api/anime/:anilistId/:episode/:audio[?server=Katana Sub]`);
   console.log(`  GET /api/anime/mal/:malId/:episode/:audio[?server=Katana Sub]`);
+  console.log(`  fleet: ?worker=1 (plain) | ?data=en (encrypted) | ?worker=<url> (custom)`);
+  console.log(
+    `  outbound proxy: ${hasProxy ? `${PROXY_HOST}:${PROXY_PORT} (webshare rotating)` : "OFF (direct)"}`
+  );
 });
