@@ -1,12 +1,12 @@
 {
   "name": "vidly-api",
-  "version": "1.0.0",
-  "description": "Minimal zero-dependency Node.js API that resolves Vidly.pro stream URLs for movies, TV and anime. Returns the fastest server by default, or a specific server via ?server=.",
+  "version": "1.1.0",
+  "description": "Minimal zero-dependency Node.js API that resolves Vidly.pro stream URLs for movies, TV and anime. Fastest-server selection, ?server= pinning, webshare rotating proxy, and AES-256-GCM fleet encrypted-URL mode (?worker=/?data=en).",
   "type": "commonjs",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node test_lib.js"
+    "verify": "node verify.js"
   },
   "engines": {
     "node": ">=18"
@@ -16,7 +16,10 @@
     "streaming",
     "hls",
     "api",
-    "proxy"
+    "proxy",
+    "webshare",
+    "cloudflare-worker",
+    "aes-gcm"
   ],
   "license": "MIT"
 }
