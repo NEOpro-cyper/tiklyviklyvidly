@@ -8,7 +8,7 @@
 const fleet = require("./lib/fleet");
 const v = require("./lib/vidly");
 
-const EN_WORKER = "https://noisy-feather-adb6.ryklcd0086.workers.dev";
+const EN_WORKER = "https://noisy-feather-adb6.ryklcd0086.workers.dev/vl";
 
 function assert(cond, msg) {
   if (!cond) { console.error("  ✗ " + msg); process.exitCode = 1; }
