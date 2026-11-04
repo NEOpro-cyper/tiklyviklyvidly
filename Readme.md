@@ -354,6 +354,25 @@ exposed). TMDB serves images from its own global CDN, so proxying them only
 burned worker CPU/RAM and added latency — now image traffic never touches the
 worker at all, while stream/subtitle URLs are still wrapped as before.
 
+### 9.3 Streams & captions organised
+
+Multi-audio servers (Prism etc.) return **one HLS stream per language** and
+attach the same full caption list to every stream — e.g. 6 streams × 7
+captions = 42 duplicated entries in one response. The API now organises the
+envelope into two clean lists:
+
+* `streams[]` — lean HLS entries only: `url`, `type`, `quality`, `language`,
+  `label`. No nested captions anymore.
+* `subtitles[]` — ONE top-level, URL-deduplicated caption list: `url`,
+  `lang`, `label`. Always present (possibly `[]`), and its URLs go through
+  the same fleet rewriting as stream URLs (`?worker=1` / `?data=en`).
+
+Clients simply pick `streams[i].url` for the source and attach
+`subtitles[]` once to the player's caption menu (hls.js `subtitleTracks`,
+`addRemoteTextTrack`, etc.). A Prism-sized response shrinks by tens of KB
+(42 caption entries → 7 unique), which also cuts cache RAM and JSON
+serialization CPU.
+
 ---
 
 ## Files

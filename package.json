@@ -1,6 +1,6 @@
 {
   "name": "vidly-api",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Minimal zero-dependency Node.js API that resolves Vidly.pro stream URLs for movies, TV and anime. Fastest-server selection, ?server= pinning, webshare rotating proxy, and AES-256-GCM fleet encrypted-URL mode (?worker=/?data=en).",
   "type": "commonjs",
   "main": "server.js",

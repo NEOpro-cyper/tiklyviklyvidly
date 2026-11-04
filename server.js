@@ -172,6 +172,27 @@ async function handle(mediaPath, serverName, query, selfBase) {
   const { chosen, streams, ms, mode, errors, allRanked, ctx } =
     await resolveStreams(mediaPath, serverName);
 
+  // Organise streams & captions. Multi-audio servers (e.g. Prism) return one
+  // HLS stream per language and attach the SAME full subtitle list to every
+  // stream — e.g. 6 streams × 7 captions = 42 duplicated entries. Hoist the
+  // captions into ONE top-level, URL-deduplicated "subtitles" array and keep
+  // "streams" as a lean list of HLS URLs. Clients get two clean lists:
+  //   streams[].url/type/quality/language/label  → pick an HLS source
+  //   subtitles[].url/lang/label                 → attach captions once
+  const seenSub = new Set();
+  const subtitles = [];
+  for (const s of streams) {
+    for (const sub of s.subtitles || []) {
+      if (!sub || !sub.url || seenSub.has(sub.url)) continue;
+      seenSub.add(sub.url);
+      subtitles.push({
+        url: sub.url,
+        lang: sub.lang || sub.language || null,
+        label: sub.label || sub.lang || null,
+      });
+    }
+  }
+
   const body = {
     title: ctx.meta.title || null,
     year: ctx.meta.year || null,
@@ -188,8 +209,8 @@ async function handle(mediaPath, serverName, query, selfBase) {
       quality: s.quality || null,
       language: s.language || null,
       label: s.label || null,
-      subtitles: s.subtitles && s.subtitles.length ? s.subtitles : undefined,
     })),
+    subtitles, // deduplicated captions — no longer repeated on every stream
     allServers: ctx.servers.map((s) => ({
       id: s.id,
       label: s.label,
