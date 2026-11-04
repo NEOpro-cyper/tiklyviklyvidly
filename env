@@ -19,4 +19,4 @@ TOKEN_SECRET=bbef4e4840ab0a33b6c129f0de8b1a6735471c82f43e9babc4adc64c5959a64a
 WORKER_PROXY_URL=https://bold-hill-8d64.ntb7nmytsd.workers.dev
 
 # Encrypted-mode worker (?data=en)
-WORKER_URL_EN=https://noisy-feather-adb6.ryklcd0086.workers.dev
+WORKER_URL_EN=https://noisy-feather-adb6.ryklcd0086.workers.dev/vl
