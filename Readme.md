@@ -312,6 +312,50 @@ re-fetch the page to get a fresh one.)
 
 ---
 
+## 9. API server ops: response memory cache & direct images
+
+### 9.1 Response memory cache — successful responses only, 1 hour
+
+`server.js` keeps an **in-memory cache of successful responses only**:
+
+* A lookup that resolved **≥ 1 stream** is cached whole (the raw, pre-fleet
+  JSON envelope) for **1 hour** (`RESPONSE_CACHE_TTL_MS`, default `3600000`).
+* Errors, empty results (`streams: []`) and session-expired failures are
+  **never cached** — the very next request retries upstream immediately.
+* One cached entry serves every mode: the `?worker=1` / `?data=en` fleet
+  rewrite is re-applied per request, so a hit skips the page fetch, the RSC
+  flight parse, the XOR decrypt and the 7-server `/api/sources` race
+  entirely.
+* The cache is **LRU-bounded** (`RESPONSE_CACHE_MAX_ENTRIES`, default 300
+  entries of a few KB each), so RAM stays well under 1 MB no matter how many
+  titles are requested.
+* Every response carries an `X-Cache: HIT|MISS|BYPASS` header and
+  `GET /health` reports `{ entries, maxEntries, ttlMs, hits, misses }`.
+* If vidly's session token expires before the TTL, the stale page-cache entry
+  is evicted automatically and the lookup is retried once with a fresh page,
+  so a dead token can never wedge a title in a 502 loop.
+
+Environment variables:
+
+| Var | Default | Meaning |
+|-----|---------|---------|
+| `RESPONSE_CACHE_TTL_MS` | `3600000` (1 h) | How long a successful response stays cached |
+| `RESPONSE_CACHE_MAX_ENTRIES` | `300` | LRU cap for the response cache |
+| `PAGE_CACHE_TTL_MS` | `3600000` (1 h) | Vidly page / session-token cache TTL |
+| `PAGE_CACHE_MAX_ENTRIES` | `500` | LRU cap for the page cache |
+
+### 9.2 Cover images go direct to TMDB
+
+`poster` and `backdrop` are **never** rewritten through the fleet worker —
+neither in plain (`?worker=1`) nor encrypted (`?data=en`) mode. They stay raw
+`https://image.tmdb.org/t/p/w500/…` / `…/w1280/…` URLs (in fact *any*
+`image.tmdb.org` URL is left untouched, including `meta.logo` if ever
+exposed). TMDB serves images from its own global CDN, so proxying them only
+burned worker CPU/RAM and added latency — now image traffic never touches the
+worker at all, while stream/subtitle URLs are still wrapped as before.
+
+---
+
 ## Files
 
 | Path | Purpose |

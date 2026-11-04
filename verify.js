@@ -29,7 +29,7 @@ function assert(cond, msg) {
   // a different URL must yield a different token
   assert(fleet.encryptUrl("https://example.com/b.m3u8") !== t1, "different URL → different token");
 
-  console.log("\n== 2. ?data=en hides upstream hostnames ==");
+  console.log("\n== 2. ?data=en hides upstream hostnames, images stay direct ==");
   // Simulate a small response body and run the rewriter.
   const sample = {
     title: "X",
@@ -38,18 +38,30 @@ function assert(cond, msg) {
         subtitles: [{ url: "https://cache.vdrk.site/v1/vtt/movie/533535/English.vtt" }] },
     ],
     poster: "https://image.tmdb.org/t/p/w500/x.jpg",
+    backdrop: "https://image.tmdb.org/t/p/w1280/y.jpg",
     attempts: 3,
   };
   const enc = fleet.applyFleet(JSON.parse(JSON.stringify(sample)), { data: "en" }, null);
   const serialized = JSON.stringify(enc);
   assert(enc.encrypted === true, "top-level encrypted:true set");
-  assert(!/rousav\.tech|vdrk\.site|image\.tmdb\.org/.test(serialized),
-    "no raw upstream hostnames in JSON");
+  assert(!/rousav\.tech|vdrk\.site/.test(serialized),
+    "no raw stream/subtitle hostnames in JSON");
   assert(/v1\.[^.]+\.[^.]+/.test(serialized), "tokens (v1.<iv>.<ct>) present");
+  assert(enc.streams[0].url.startsWith(fleet.WORKER_URL_EN + "/"),
+    "stream URL wrapped through the EN worker");
+  assert(enc.poster === sample.poster && enc.backdrop === sample.backdrop,
+    "poster/backdrop stay DIRECT from image.tmdb.org (never proxied)");
   assert(enc.attempts === 3, "diagnostic key 'attempts' left untouched");
   // idempotent: running again doesn't double-wrap
   const enc2 = fleet.applyFleet(JSON.parse(JSON.stringify(enc)), { data: "en" }, null);
   assert(JSON.stringify(enc2) === JSON.stringify(enc), "rewriter is idempotent");
+
+  console.log("\n== 2b. plain ?worker=1 also leaves images direct ==");
+  const plain = fleet.applyFleet(JSON.parse(JSON.stringify(sample)), { worker: "1" }, null);
+  assert(plain.poster === sample.poster && plain.backdrop === sample.backdrop,
+    "images untouched in plain proxy mode too");
+  assert(plain.streams[0].url.startsWith(fleet.WORKER_PROXY_URL + "/"),
+    "stream URL goes through the plain worker");
 
   console.log("\n== 3. ?worker=1&data=en → encrypted wins ==");
   const both = fleet.resolveMode({ worker: "1", data: "en" });
